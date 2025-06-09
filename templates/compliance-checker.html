@@ -370,23 +370,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let html = '<div class="compliance-result">';
         
-        // Compliance Status
-        if (data.compliance_status) {
+        // Missing Clauses
+        if (data.missing_clauses && data.missing_clauses.length > 0) {
             html += `
                 <div class="compliance-section">
-                    <h3>Compliance Status</h3>
-                    <p>${data.compliance_status}</p>
+                    <h3>Missing Clauses</h3>
+                    <ul>
+                        ${data.missing_clauses.map(clause => `
+                            <li>${clause}</li>
+                        `).join('')}
+                    </ul>
                 </div>
             `;
         }
 
-        // Issues Found
-        if (data.issues && data.issues.length > 0) {
+        // Compliance Issues
+        if (data.compliance_issues && data.compliance_issues.length > 0) {
             html += `
                 <div class="compliance-section">
-                    <h3>Issues Found</h3>
+                    <h3>Compliance Issues</h3>
                     <ul>
-                        ${data.issues.map(issue => `
+                        ${data.compliance_issues.map(issue => `
                             <li>${issue}</li>
                         `).join('')}
                     </ul>
@@ -404,6 +408,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             <li>${rec}</li>
                         `).join('')}
                     </ul>
+                </div>
+            `;
+        }
+
+        // Summary
+        if (data.summary) {
+            html += `
+                <div class="compliance-section">
+                    <h3>Summary</h3>
+                    <p>${data.summary}</p>
                 </div>
             `;
         }

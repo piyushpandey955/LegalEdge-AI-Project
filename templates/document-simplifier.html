@@ -13,12 +13,26 @@
         </div>
 
         <div class="chat-input-container">
+            <div class="upload-section">
+                <label for="pdfUpload" class="upload-label">
+                    <div class="upload-content">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 16L12 8M12 8L15 11M12 8L9 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 15V16C3 18.2091 4.79086 20 7 20H17C19.2091 20 21 18.2091 21 16V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Upload PDF Document</span>
+                    </div>
+                </label>
+                <input type="file" id="pdfUpload" accept=".pdf" style="display: none;">
+                <div id="fileInfo" class="file-info"></div>
+            </div>
+
             <form id="simplifierForm" class="chat-form">
                 <div class="input-wrapper">
                     <textarea 
                         id="document" 
                         name="document" 
-                        placeholder="Paste your complex legal document here for simplification..."
+                        placeholder="Or paste your legal text here for simplification..."
                         rows="3"></textarea>
                     <button type="submit" class="send-button">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -75,6 +89,47 @@
 .welcome-message p {
     color: rgba(255, 255, 255, 0.7);
     font-size: 1.1rem;
+}
+
+.upload-section {
+    max-width: 800px;
+    margin: 0 auto 1rem;
+    text-align: center;
+}
+
+.upload-label {
+    display: block;
+    padding: 1.5rem;
+    background-color: var(--card-bg);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-label:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.upload-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-color);
+}
+
+.upload-content svg {
+    width: 32px;
+    height: 32px;
+    color: var(--primary-color);
+}
+
+.file-info {
+    margin-top: 0.5rem;
+    color: var(--text-color);
+    font-size: 0.9rem;
 }
 
 .chat-input-container {
@@ -141,6 +196,16 @@ textarea:focus {
     text-align: center;
     margin: 1rem auto;
     max-width: 800px;
+    padding: 1rem;
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    color: var(--text-color);
+}
+
+.loading::after {
+    content: "Simplifying document...";
+    display: block;
+    margin-top: 0.5rem;
 }
 
 .response-area {
@@ -151,6 +216,7 @@ textarea:focus {
     border-radius: 12px;
     white-space: pre-wrap;
     word-wrap: break-word;
+    color: var(--text-color);
 }
 
 .disclaimer {
@@ -176,5 +242,110 @@ textarea:focus {
     }
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('simplifierForm');
+    const documentInput = document.getElementById('document');
+    const pdfUpload = document.getElementById('pdfUpload');
+    const fileInfo = document.getElementById('fileInfo');
+    const responseArea = document.getElementById('response');
+    const loadingIndicator = document.getElementById('loading');
+
+    // Handle PDF upload
+    pdfUpload.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.type !== 'application/pdf') {
+            alert('Please upload a PDF file');
+            return;
+        }
+
+        fileInfo.textContent = `Selected file: ${file.name}`;
+        
+        try {
+            loadingIndicator.style.display = 'block';
+            responseArea.innerHTML = '';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/simplify-document-pdf', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Display the response
+            responseArea.innerHTML = `<div class="simplified-text">${data.response}</div>`;
+            
+            // Clear the file input
+            pdfUpload.value = '';
+            fileInfo.textContent = '';
+        } catch (error) {
+            console.error('Error:', error);
+            responseArea.innerHTML = `<div class="error-message">
+                <h3>Error</h3>
+                <p>${error.message}</p>
+            </div>`;
+        } finally {
+            loadingIndicator.style.display = 'none';
+        }
+    });
+
+    // Handle text input
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const document = documentInput.value.trim();
+        
+        if (!document) {
+            alert('Please enter legal text or upload a PDF file');
+            return;
+        }
+
+        try {
+            loadingIndicator.style.display = 'block';
+            responseArea.innerHTML = '';
+
+            const response = await fetch('/simplify-document', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ legal_text: document })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            // Display the response
+            responseArea.innerHTML = `<div class="simplified-text">${data.response}</div>`;
+            
+            // Clear the input
+            documentInput.value = '';
+        } catch (error) {
+            console.error('Error:', error);
+            responseArea.innerHTML = `<div class="error-message">
+                <h3>Error</h3>
+                <p>${error.message}</p>
+            </div>`;
+        } finally {
+            loadingIndicator.style.display = 'none';
+        }
+    });
+});
+</script>
 {% endblock %}
  

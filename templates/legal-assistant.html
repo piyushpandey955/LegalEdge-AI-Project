@@ -280,7 +280,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             if (!response.ok) {
-                throw new Error('Failed to get response');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Server error: ${response.status} - ${errorData.detail || response.statusText}`);
             }
             
             const data = await response.json();
@@ -288,12 +289,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Remove loading message
             removeLoadingMessage(loadingId);
             
+            if (!data.response) {
+                throw new Error('No response received from server');
+            }
+            
             // Add assistant message
             addMessage('assistant', data.response);
             
         } catch (error) {
+            console.error('Error:', error);
             removeLoadingMessage(loadingId);
-            addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+            addMessage('assistant', `Error: ${error.message}. Please try again or check if the Ollama server is running.`);
         }
         
         // Scroll to bottom

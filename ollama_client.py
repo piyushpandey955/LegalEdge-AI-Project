@@ -99,9 +99,8 @@ class OllamaClient:
         full_response = ""
         try:
             for chunk in self._generate_stream(prompt, system_prompt):
-                if "response" in chunk:
-                    full_response += chunk["response"]
-                    logger.info(f"Received chunk: {chunk['response'][:100]}...")
+                full_response += chunk
+                logger.info(f"Received chunk: {chunk[:100]}...")
             
             if not full_response:
                 logger.error("No response generated from Ollama")
@@ -135,8 +134,7 @@ class OllamaClient:
         full_response = ""
         try:
             for chunk in self._generate_stream(prompt, system_prompt):
-                if "response" in chunk:
-                    full_response += chunk["response"]
+                full_response += chunk
             
             # Try to parse the response as JSON
             try:
@@ -178,8 +176,7 @@ class OllamaClient:
         full_response = ""
         try:
             for chunk in self._generate_stream(question, system_prompt):
-                if "response" in chunk:
-                    full_response += chunk["response"]
+                full_response += chunk
             logger.info("Successfully generated legal assistant response")
             return full_response
         except Exception as e:
@@ -188,22 +185,93 @@ class OllamaClient:
 
     def check_compliance(self, legal_text: str) -> Dict[str, Any]:
         """Check legal text for compliance and required clauses."""
-        system_prompt = """You are a legal compliance checker. Analyze the provided legal text and:
-        1. Identify any missing required clauses
-        2. List potential compliance issues
-        3. Provide a checklist of recommended additions
-        Format the output as a JSON object with these sections."""
+        system_prompt = """You are a legal compliance checker. Analyze the provided legal text and provide a response in the following JSON format:
+        {
+            "missing_clauses": [
+                "list of missing required clauses"
+            ],
+            "compliance_issues": [
+                "list of potential compliance issues"
+            ],
+            "recommendations": [
+                "list of recommended additions or changes"
+            ],
+            "summary": "brief summary of compliance status"
+        }
+        IMPORTANT: Your response MUST be a valid JSON object. Do not include any text before or after the JSON object. Do not use markdown formatting or bullet points."""
         
-        prompt = f"Check compliance for this legal text:\n\n{legal_text}"
+        prompt = f"Check compliance for this legal text and provide the analysis in the specified JSON format:\n\n{legal_text}"
         full_response = ""
-        for chunk in self._generate_stream(prompt, system_prompt):
-            if "response" in chunk:
-                full_response += chunk["response"]
-        
         try:
-            return json.loads(full_response)
-        except json.JSONDecodeError:
-            return {"error": "Failed to parse LLM response as JSON"}
+            for chunk in self._generate_stream(prompt, system_prompt):
+                full_response += chunk
+            
+            # Try to parse the response as JSON
+            try:
+                return json.loads(full_response)
+            except json.JSONDecodeError:
+                # If parsing fails, try to extract JSON from the response
+                json_match = re.search(r'\{.*\}', full_response, re.DOTALL)
+                if json_match:
+                    try:
+                        return json.loads(json_match.group())
+                    except json.JSONDecodeError:
+                        pass
+                
+                # If all parsing attempts fail, parse the text response into structured data
+                try:
+                    # Split the response into sections
+                    sections = full_response.split('\n\n')
+                    result = {
+                        "missing_clauses": [],
+                        "compliance_issues": [],
+                        "recommendations": [],
+                        "summary": ""
+                    }
+                    
+                    current_section = None
+                    for section in sections:
+                        if "Missing Clauses:" in section:
+                            current_section = "missing_clauses"
+                            continue
+                        elif "Potential Compliance Issues:" in section:
+                            current_section = "compliance_issues"
+                            continue
+                        elif "Recommendations:" in section:
+                            current_section = "recommendations"
+                            continue
+                        elif "Summary:" in section:
+                            current_section = "summary"
+                            continue
+                        
+                        if current_section == "summary":
+                            result["summary"] = section.strip()
+                        elif current_section and section.strip():
+                            # Remove bullet points and clean up the text
+                            cleaned_text = section.replace('*', '').strip()
+                            if cleaned_text:
+                                result[current_section].append(cleaned_text)
+                    
+                    return result
+                except Exception as e:
+                    logger.error(f"Error parsing text response: {str(e)}")
+                    return {
+                        "error": "Failed to parse response",
+                        "raw_response": full_response,
+                        "missing_clauses": [],
+                        "compliance_issues": [],
+                        "recommendations": [],
+                        "summary": "Unable to analyze the document due to formatting issues."
+                    }
+        except Exception as e:
+            logger.error(f"Error in check_compliance: {str(e)}")
+            return {
+                "error": f"Error checking compliance: {str(e)}",
+                "missing_clauses": [],
+                "compliance_issues": [],
+                "recommendations": [],
+                "summary": "An error occurred while analyzing the document."
+            }
 
     def simplify_document(self, legal_text: str) -> str:
         """Convert complex legal text into plain English."""
@@ -220,8 +288,7 @@ class OllamaClient:
             
             full_response = ""
             for chunk in self._generate_stream(prompt, system_prompt):
-                if "response" in chunk:
-                    full_response += chunk["response"]
+                full_response += chunk
                     
             if not full_response:
                 raise Exception("No response generated from Ollama")

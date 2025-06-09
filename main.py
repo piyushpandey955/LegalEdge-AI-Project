@@ -177,6 +177,40 @@ async def simplify_document(request: SimplificationRequest):
         logger.error(f"Stack trace: {traceback.format_exc()}")
         raise handle_ollama_error(e)
 
+@app.post("/simplify-document-pdf")
+async def simplify_document_pdf(file: UploadFile = File(...)):
+    try:
+        logger.info(f"Received PDF file for simplification: {file.filename}")
+        
+        # Read the PDF file
+        contents = await file.read()
+        pdf_file = io.BytesIO(contents)
+        
+        # Extract text from PDF
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        text = ""
+        for page in pdf_reader.pages:
+            text += page.extract_text()
+        
+        if not text.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from the PDF file"
+            )
+        
+        # Simplify the extracted text
+        logger.info("Simplifying extracted text from PDF")
+        response = ollama_client.simplify_document(text)
+        return {"response": response}
+        
+    except Exception as e:
+        logger.error(f"Error processing PDF: {str(e)}")
+        logger.error(f"Stack trace: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
+
 @app.post("/analyze-contract-pdf")
 async def analyze_contract_pdf(file: UploadFile = File(...)):
     try:
